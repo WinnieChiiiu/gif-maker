@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>✨ Winnie's GIF 動態工坊</title>
+    
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🍘</text></svg>">
+    
+    <script src="https://cdn.jsdelivr.net/npm/gif.js.optimized@1.0.1/dist/gif.worker.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gif.js.optimized@1.0.1/dist/gif.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #0a0e17; color: #a9b2c3; margin: 0; height: 100vh; overflow: hidden; display: flex; font-size: 0.95rem;
+        }
+        :root { --neon-cyan: #00ffff; --neon-blue: #3498db; --btn-start: #3498db; --btn-end: #2980b9; --btn-green-start: #2ecc71; --btn-green-end: #27ae60; }
+
+        /* 🔒 左側鎖定：絕對不允許縮短或變形 */
+        .left-panel { 
+            width: 50%; min-width: 50%; flex-shrink: 0; 
+            height: 100%; overflow-y: auto; padding: 30px; box-sizing: border-box; 
+            background-color: #121726; border-right: 2px solid #1a2233; 
+        }
+        
+        /* 🔒 右側鎖定：獨立空間 */
+        .right-panel { 
+            width: 50%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            background-color: #111a2e; padding: 20px; box-sizing: border-box; overflow: hidden;
+        }
+        
+        h1 { color: var(--neon-cyan); margin-top: 0; font-weight: 666; letter-spacing: 2px; text-shadow: 0 0 10px rgba(0, 255, 255, 0.5); }
+        .section { background-color: #1a2233; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid var(--neon-cyan); }
+        
+        .label-with-btn { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+        label { font-weight: bold; color: var(--neon-cyan); }
+        
+        input[type="file"], select, input[type="range"] { width: 100%; padding: 10px; border: 1px solid #1a2233; border-radius: 6px; background: #0a0e17; color: #a9b2c3; box-sizing: border-box; }
+        
+        button { border: none; padding: 12px 24px; font-size: 16px; border-radius: 8px; cursor: pointer; transition: 0.3s; width: 100%; font-weight: bold; color: #fff; }
+        button:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .btn-primary { background: linear-gradient(135deg, var(--btn-start), var(--btn-end)); }
+        .btn-clear { background: linear-gradient(135deg, #e74c3c, #c0392b); width: auto; padding: 8px 16px; font-size: 13px; display: block; margin: 15px auto 0; }
+        .btn-green { background: linear-gradient(135deg, var(--btn-green-start), var(--btn-green-end)); }
+        .btn-secondary { background: #34495e; }
+
+        /* ✨ GEM 按鈕特效 */
+        .btn-gem { 
+            background: linear-gradient(135deg, #8e44ad, #a29bfe); 
+            width: auto; padding: 4px 12px; font-size: 12px; border-radius: 20px; 
+            text-decoration: none; color: #fff; display: inline-flex; align-items: center; 
+            transition: 0.3s; box-shadow: 0 0 10px rgba(142, 68, 173, 0.4);
+        }
+        .btn-gem:hover { transform: scale(1.05); box-shadow: 0 0 15px rgba(162, 155, 254, 0.8); }
+
+        /* 影格預覽區樣式 */
+        #framePreviewList { 
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); 
+            gap: 10px; margin-top: 10px; min-height: 80px; 
+            background: rgba(0,0,0,0.2); padding: 10px; border-radius: 6px; border: 1px dashed #2c394e;
+        }
+        .frame-item { background-color: #0a0e17; border: 1px solid var(--neon-blue); border-radius: 6px; position: relative; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .frame-item img { max-width: 90%; max-height: 90%; object-fit: contain; }
+        
+        /* 影格小按鈕 */
+        .delete-btn, .crop-btn { 
+            position: absolute; color: white; border: none; border-radius: 4px; 
+            padding: 2px 6px; font-size: 10px; cursor: pointer; z-index: 10; 
+            opacity: 0.8; transition: 0.2s; width: auto; height: auto;
+        }
+        .delete-btn { top: 4px; left: 4px; background: rgba(231, 76, 60, 0.9); }
+        .crop-btn { bottom: 4px; right: 4px; background: rgba(52, 152, 219, 0.9); }
+        .delete-btn:hover, .crop-btn:hover { opacity: 1; transform: scale(1.1); }
+
+        /* 🔧 右側預覽框獨立高度設定，不推擠父容器 */
+        #interactiveBox, #resultBox { 
+            display: none; width: 100%; max-width: 500px; text-align: center; 
+            flex-direction: column; align-items: center;
+        }
+        #previewCanvas, #gifResult { 
+            border: 2px dashed var(--neon-cyan); background: #000; 
+            max-width: 100%; max-height: 55vh; border-radius: 8px; 
+            object-fit: contain; margin-bottom: 10px;
+        }
+
+        #loading { display: none; color: var(--neon-cyan); font-weight: bold; font-size: 1.2rem; }
+        #cropModal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 9999; flex-direction: column; align-items: center; justify-content: center; }
+        .crop-container { width: 90%; max-width: 700px; height: 50vh; background: #fff; margin-bottom: 20px; }
+
+        /* ✨ Winnie 標籤浮動特效 */
+        .footer-container { display: flex; align-items: center; justify-content: center; gap: 20px; margin-top: 30px; padding-bottom: 20px; }
+        .winnie-badge { 
+            display: inline-block; font-weight: 900; color: #888; padding: 10px 25px; 
+            border-radius: 30px; border: 1px solid #333; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); 
+            background: transparent; cursor: default;
+        }
+        .winnie-badge:hover { 
+            color: #fff; background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%); 
+            box-shadow: 0 5px 15px rgba(255, 154, 158, 0.6); transform: translateY(-5px) scale(1.05); border-color: transparent; 
+        }
+        .footer-gif { width: 135px; height: 135px; object-fit: contain; }
+    </style>
+</head>
+<body>
+
+    <div class="left-panel">
+        <h1>✨ Winnie's GIF 動態工坊</h1>
+        <p style="margin-top: 0; color: #7f8c8d; font-size: 0.9em;">注入靈魂，讓每一格靜態影像躍動成真</p>
+        
+        <div class="section">
+            <h3>Step 1: 上傳來源</h3>
+            <div class="control-group">
+                <div class="label-with-btn">
+                    <label>A: 上傳長條合圖</label>
+                    <a href="https://gemini.google.com/gem/1OB5Zs7xRLjH7B45zRVM56Pi8ToUCs7s0?usp=sharing" target="_blank" class="btn-gem">🎨 去 GEM 裡創造</a>
+                </div>
+                <select id="frameCountSelect" style="margin-top: 8px;">
+                    <option value="5">1x5 合圖</option>
+                    <option value="6" selected>1x6 合圖</option>
+                </select>
+                <input type="file" id="spriteUpload" accept="image/*">
+            </div>
+            <hr style="border-color: #2c394e; margin: 20px 0;">
+            <div class="control-group">
+                <label>B: 批次上傳多張</label>
+                <input type="file" id="multiUpload" accept="image/*" multiple>
+            </div>
+            <button class="btn-clear" id="clearUploadsBtn">🗑️ 清空重新上傳</button>
+        </div>
+
+        <div class="section">
+            <h3>Step 2: 確認影格</h3>
+            <div id="framePreviewList"></div>
+        </div>
+
+        <div class="section">
+            <h3>Step 3: 自訂背景 (選填)</h3>
+            <input type="file" id="backgroundUpload" accept="image/*">
+        </div>
+
+        <div class="section">
+            <h3>Step 4: 輸出設定</h3>
+            <label>⏱️ 速度: <span id="speedVal">200</span> ms</label>
+            <input type="range" id="speedRange" min="50" max="1000" step="50" value="200">
+            <label>✂️ 形狀:</label>
+            <select id="cropShapeSelect">
+                <option value="rect">矩形</option>
+                <option value="circle">圓形 (大頭貼專用)</option>
+            </select>
+        </div>
+
+        <button class="btn-primary" id="generateBtn">🔍 載入互動預覽</button>
+        
+        <div class="footer-container">
+            <div class="winnie-badge">🐻 Winnie EdTech Lab</div>
+            <img class="footer-gif" src="https://www.ntpc-smart.tw/winnie/wp.gif" alt="Winnie Lab GIF">
+        </div>
+    </div>
+
+    <div class="right-panel">
+        <h3 id="emptyState">💡 完成 Step 1-4 後載入預覽</h3>
+        <div id="loading">🚀 正在進行深度去黑邊渲染...</div>
+        
+        <div id="interactiveBox">
+            <h3 style="color: var(--neon-cyan); margin-top: 0;">🖱️ 互動預覽區</h3>
+            <p style="color: #7f8c8d; font-size: 0.8em; margin-bottom: 10px;">
+                人像：滑鼠拖曳 / 滾輪縮放<br>
+                圓圈：拖曳中心 / 拖曳四角縮放
+            </p>
+            <canvas id="previewCanvas"></canvas>
+            <button class="btn-green" id="renderFinalBtn" style="margin-top: 15px;">⬇️ 鎖定位置並產生 GIF</button>
+        </div>
+
+        <div id="resultBox">
+            <h3 style="color: #2ecc71; margin-top: 0;">🎉 渲染完成！</h3>
+            <img id="gifResult" src=""><br>
+            <a id="downloadLink" href="#" download="Winnie_GIF.gif" style="width:100%"><button class="btn-green" style="margin-top: 15px;">⬇️ 下載最終 GIF</button></a>
+            <button class="btn-secondary" id="backToEditBtn" style="margin-top: 10px;">🔙 返回微調</button>
+        </div>
+    </div>
+
+    <div id="cropModal">
+        <div class="crop-container"><img id="cropImage" src=""></div>
+        <div class="crop-actions-main" style="display:flex; gap:10px; width:90%; max-width:700px;">
+            <button class="btn-green" id="saveCropBtn">儲存調整</button>
+            <button class="btn-secondary" id="cancelCropBtn" onclick="el('cropModal').style.display='none'">取消</button>
+        </div>
+    </div>
+
+    <script>
+        const el = id => document.getElementById(id);
+        let workerBlobURL, frames = [], backgroundImageData = null, cropper = null, currentCropElement = null;
+        let previewFgImgs = [], previewBgImg = null, fgX = 0, fgY = 0, fgScale = 1;
+        let circleX = 0, circleY = 0, circleRadius = 100, isCircleMode = false;
+        let isLooping = false, animationFrameId, lastFrameTime = 0, currentFrameIdx = 0;
+        let dragMode = null; 
+
+        fetch('https://cdn.jsdelivr.net/npm/gif.js.optimized@1.0.1/dist/gif.worker.js').then(res => res.text()).then(text => workerBlobURL = URL.createObjectURL(new Blob([text], {type: 'application/javascript'})));
+
+        el('speedRange').oninput = e => el('speedVal').textContent = e.target.value;
+        new Sortable(el('framePreviewList'), { animation: 150, onEnd: () => { frames = Array.from(el('framePreviewList').querySelectorAll('.frame-img')).map(i => i.src); } });
+
+        function renderFrames() {
+            const list = el('framePreviewList');
+            list.innerHTML = '';
+            frames.forEach((src, index) => {
+                const item = document.createElement('div');
+                item.className = 'frame-item';
+                item.innerHTML = `<button class="delete-btn" onclick="deleteFrame(${index})">✕</button><button class="crop-btn" onclick="openCrop(${index})">✂</button><img src="${src}" class="frame-img">`;
+                list.appendChild(item);
+            });
+        }
+
+        window.deleteFrame = (i) => { frames.splice(i, 1); renderFrames(); };
+        window.openCrop = (i) => {
+            currentCropElement = el('framePreviewList').querySelectorAll('.frame-img')[i];
+            el('cropImage').src = frames[i];
+            el('cropModal').style.display = 'flex';
+            if (cropper) cropper.destroy();
+            cropper = new Cropper(el('cropImage'), { viewMode: 0, dragMode: 'move', cropBoxResizable: false, ready: function () {
+                const d = cropper.getImageData(); cropper.setCropBoxData({ width: d.width, height: d.height, left: d.left, top: d.top });
+            }});
+        };
+
+        el('saveCropBtn').onclick = () => {
+            currentCropElement.src = cropper.getCroppedCanvas({ fillColor: 'transparent' }).toDataURL('image/png');
+            frames = Array.from(el('framePreviewList').querySelectorAll('.frame-img')).map(i => i.src);
+            el('cropModal').style.display = 'none';
+        };
+
+        el('clearUploadsBtn').onclick = () => { frames = []; backgroundImageData = null; renderFrames(); el('interactiveBox').style.display='none'; el('resultBox').style.display='none'; el('emptyState').style.display='block'; };
+
+        el('spriteUpload').onchange = function() {
+            const r = new FileReader(); r.onload = e => {
+                const img = new Image(); img.onload = () => {
+                    const n = parseInt(el('frameCountSelect').value), w = img.width/n, h = img.height;
+                    const c = document.createElement('canvas'); c.width=w; c.height=h; const ctx=c.getContext('2d');
+                    for(let i=0; i<n; i++) { ctx.clearRect(0,0,w,h); ctx.drawImage(img, i*w, 0, w, h, 0, 0, w, h); frames.push(c.toDataURL()); }
+                    renderFrames();
+                }; img.src = e.target.result;
+            }; r.readAsDataURL(this.files[0]); this.value='';
+        };
+
+        el('multiUpload').onchange = function() {
+            let l=0; Array.from(this.files).forEach((f, i) => {
+                const r = new FileReader(); r.onload = e => { frames.push(e.target.result); if(++l === this.files.length) renderFrames(); };
+                r.readAsDataURL(f);
+            }); this.value='';
+        };
+
+        el('backgroundUpload').onchange = function() { if (this.files[0]) { const r = new FileReader(); r.onload = e => backgroundImageData = e.target.result; r.readAsDataURL(this.files[0]); } };
+
+        const cvs = el('previewCanvas'), ctx = cvs.getContext('2d');
+        function getMousePos(e) { const r = cvs.getBoundingClientRect(); return { x: (e.clientX - r.left) * (cvs.width/r.width), y: (e.clientY - r.top) * (cvs.height/r.height) }; }
+        cvs.onmousedown = (e) => {
+            const p = getMousePos(e);
+            if(isCircleMode) {
+                const h = [[-1,-1],[1,-1],[-1,1],[1,1]];
+                for(let k of h) if(Math.hypot(p.x-(circleX+k[0]*circleRadius), p.y-(circleY+k[1]*circleRadius)) < 15) { dragMode = 'circle-resize'; return; }
+                if(Math.hypot(p.x-circleX, p.y-circleY) < circleRadius) { dragMode = 'circle-move'; return; }
+            } dragMode = 'fg';
+        };
+        cvs.onmousemove = (e) => {
+            const p = getMousePos(e);
+            if(dragMode === 'circle-move') { circleX = p.x; circleY = p.y; }
+            else if(dragMode === 'circle-resize') { circleRadius = Math.max(20, Math.hypot(p.x - circleX, p.y - circleY) / 1.414); }
+            else if(dragMode === 'fg' && e.buttons === 1) { fgX += e.movementX; fgY += e.movementY; }
+        };
+        window.onmouseup = () => dragMode = null;
+        cvs.onwheel = e => { e.preventDefault(); fgScale *= (e.deltaY < 0 ? 1.05 : 0.95); };
+
+        function drawLoop(t) {
+            if(!isLooping) return; animationFrameId = requestAnimationFrame(drawLoop);
+            if(t - lastFrameTime > parseInt(el('speedRange').value)) { currentFrameIdx = (currentFrameIdx + 1) % previewFgImgs.length; lastFrameTime = t; }
+            ctx.clearRect(0, 0, cvs.width, cvs.height);
+            if(previewBgImg) ctx.drawImage(previewBgImg, 0, 0, cvs.width, cvs.height);
+            const img = previewFgImgs[currentFrameIdx];
+            if(img) ctx.drawImage(img, fgX, fgY, img.width*fgScale, img.height*fgScale);
+            if(isCircleMode) {
+                ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.beginPath(); ctx.rect(0,0,cvs.width,cvs.height); ctx.arc(circleX, circleY, circleRadius, 0, Math.PI*2, true); ctx.fill();
+                ctx.strokeStyle = '#fff'; ctx.setLineDash([5,5]); ctx.beginPath(); ctx.arc(circleX, circleY, circleRadius, 0, Math.PI*2); ctx.stroke();
+                ctx.fillStyle = '#fff'; ctx.setLineDash([]); [[-1,-1],[1,-1],[-1,1],[1,1]].forEach(d => ctx.fillRect(circleX + d[0]*circleRadius - 6, circleY + d[1]*circleRadius - 6, 12, 12));
+            }
+        }
+
+        el('generateBtn').onclick = () => {
+            if(!frames.length) return; isCircleMode = el('cropShapeSelect').value === 'circle'; el('generateBtn').disabled = true;
+            let loaded = 0; previewFgImgs = [];
+            frames.forEach((src, i) => { const img = new Image(); img.onload = () => { previewFgImgs[i] = img; if(++loaded === frames.length) start(); }; img.src = src; });
+            function start() { if(backgroundImageData) { previewBgImg = new Image(); previewBgImg.onload = init; previewBgImg.src = backgroundImageData; } else { previewBgImg = null; init(); } }
+            function init() {
+                el('generateBtn').disabled = false; cvs.width = previewBgImg ? previewBgImg.width : previewFgImgs[0].width; cvs.height = previewBgImg ? previewBgImg.height : previewFgImgs[0].height;
+                fgX = (cvs.width - previewFgImgs[0].width)/2; fgY = (cvs.height - previewFgImgs[0].height)/2; fgScale = 1; circleX = cvs.width/2; circleY = cvs.height/2; circleRadius = Math.min(cvs.width, cvs.height)/3;
+                el('interactiveBox').style.display='flex'; el('emptyState').style.display='none'; el('resultBox').style.display='none';
+                isLooping = true; lastFrameTime = 0; drawLoop(0);
+            }
+        };
+
+        el('renderFinalBtn').onclick = () => {
+            isLooping = false; el('interactiveBox').style.display='none'; el('loading').style.display='block';
+            const w = isCircleMode ? Math.round(circleRadius*2) : cvs.width, h = isCircleMode ? Math.round(circleRadius*2) : cvs.height;
+            const gif = new GIF({ workers:4, width: w, height: h, workerScript: workerBlobURL, transparent: '0xFF00FF', quality: 1 });
+            const tempC = document.createElement('canvas'); tempC.width = w; tempC.height = h; const tCtx = tempC.getContext('2d');
+            let p=0;
+            previewFgImgs.forEach(img => {
+                tCtx.fillStyle = '#FF00FF'; tCtx.fillRect(0,0,w,h); tCtx.save();
+                if(isCircleMode) { tCtx.beginPath(); tCtx.arc(circleRadius, circleRadius, circleRadius-1, 0, Math.PI*2); tCtx.clip(); tCtx.translate(circleRadius - circleX, circleRadius - circleY); }
+                if(previewBgImg) tCtx.drawImage(previewBgImg, 0, 0, cvs.width, cvs.height); tCtx.drawImage(img, fgX, fgY, img.width*fgScale, img.height*fgScale); tCtx.restore();
+                gif.addFrame(tCtx, {copy:true, delay: parseInt(el('speedRange').value), disposal: 2});
+                if(++p === previewFgImgs.length) { gif.on('finished', b => { el('gifResult').src = URL.createObjectURL(b); el('downloadLink').href = el('gifResult').src; el('loading').style.display='none'; el('resultBox').style.display='flex'; if(isCircleMode) el('resultBox').classList.add('is-circle'); else el('resultBox').classList.remove('is-circle'); }); gif.render(); }
+            });
+        };
+        el('backToEditBtn').onclick = () => { el('resultBox').style.display='none'; el('interactiveBox').style.display='flex'; isLooping=true; lastFrameTime=performance.now(); drawLoop(lastFrameTime); };
+    </script>
+</body>
+</html>
